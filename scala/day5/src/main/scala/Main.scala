@@ -1,8 +1,8 @@
+import scala.collection.mutable.ArraySeq
+import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.Map
 import scala.io.Source
 import scala.util.matching.Regex
-import scala.collection.mutable.ArraySeq
-import scala.collection.mutable.Map
-import scala.collection.mutable.ListBuffer
 
 case class Range(start: Long, length: Long, kind: String) {
   def end() = start + length - 1
@@ -27,7 +27,7 @@ case class MappedConverter(
   override def apply(source: Range) = {
     if (source.kind == kindIn) {
       val overlapStart = source.start.max(sourceStart)
-      val overlapEnd = source.end.min(sourceEnd)
+      val overlapEnd = source.end().min(sourceEnd)
       if (overlapEnd - overlapStart >= 0) {
         List(
           Range(source.start, overlapStart - source.start, kindIn),
@@ -36,7 +36,7 @@ case class MappedConverter(
             overlapEnd - overlapStart + 1,
             kindOut
           ),
-          Range(overlapEnd + 1, source.end - overlapEnd, kindIn)
+          Range(overlapEnd + 1, source.end() - overlapEnd, kindIn)
         )
       } else {
         List(source)
@@ -73,7 +73,7 @@ object Main extends App {
     val source = Source.fromFile(file_path)
 
     var seedNumbers: ArraySeq[Long] = Array[Long]()
-    var converters: ListBuffer[Converter] = ListBuffer[Converter]()
+    val converters: ListBuffer[Converter] = ListBuffer[Converter]()
     var in: String = ""
     var out: String = ""
 
@@ -106,7 +106,7 @@ object Main extends App {
             converters += converter
           }
 
-          case anyPattern => {}
+          case _ => {}
         }
       )
 
