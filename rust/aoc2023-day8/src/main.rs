@@ -1,5 +1,6 @@
 use regex::Regex;
-use std::collections::HashMap;
+use std::cell::OnceCell;
+use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::num::ParseIntError;
@@ -15,59 +16,120 @@ pub enum ParsingError {
     IOError(#[from] io::Error),
 }
 
-#[derive(Debug)]
+type NodeRef = Rc<OnceCell<TreeNode>>;
+
 struct TreeNode {
     label: String,
-    left: Option<Rc<TreeNode>>,
-    right: Option<Rc<TreeNode>>,
+    left: NodeRef,
+    right: NodeRef,
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 struct Problem {
-    root: Rc<TreeNode>,
+    root: NodeRef,
     instructions: Instructions,
 }
 
-fn get_node(label: &str, dict: &HashMap<String, (String, String)>) -> Option<Rc<TreeNode>> {
-    let pair = &dict.get(label);
+// fn get_node(label: &str, tree: &TreeNode) -> NodeRef {
+//
+//     let node = dict.get(label);
+//     let node = TreeNode::find_or_create(root, label)
+//
+//     if let Some(node) = node {
+//         let left = dict.get()
+//
+//         node.left.get_or_init(|| get_node(left, dict).);
+//
+//        Rc::from(TreeNode {
+//                 label: label.to_owned(),
+//                 left:
+//                 right: get_node(right, dict),
+//             })
+//
+//         if label != left && label != right {
+//             Some()
+//         } else {
+//             None
+//         }
+//     } else {
+//         None
+//     }
+// }
 
-    dbg!(pair);
+impl fmt::Debug for Problem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+       TreeNode::print_node(&self.root, f)
+    }
+}
 
-    if let Some((left, right)) = pair {
-        if label != left && label != right {
-            Some(Rc::from(TreeNode {
-                label: label.to_owned(),
-                left: get_node(left, dict),
-                right: get_node(right, dict),
-            }))
+impl TreeNode {
+    pub fn print_node(noderef: &NodeRef, f: &mut fmt::Formatter) -> fmt::Result {
+
+        if let Some(node) = noderef.get() {
+            let _ = TreeNode::print_node(&node.left, f);
+            let res = write!(f, "{} ", node.label);
+            let _ = TreeNode::print_node(&node.right, f);
+            res 
+        }else{
+            Ok(())
+        }
+    }
+
+    pub fn find(noderef: &NodeRef, label: &str) -> Option<NodeRef> {
+        if let Some(node) = noderef.get() {
+            if node.label == label {
+                Some(noderef.clone())
+            } else {
+                if let Some(node) = TreeNode::find(&node.left, label) {
+                    Some(noderef.clone())
+                } else {
+                    TreeNode::find(&node.right, label)
+                }
+            }
         } else {
             None
         }
-    } else {
-        None
+    }
+
+    pub fn find_or_create(root: &NodeRef, label: &str) -> NodeRef {
+        match TreeNode::find(root, label) {
+            Some(node) => node,
+            None => Rc::new(
+                TreeNode {
+                    label: label.to_owned(),
+                    left: Rc::new(OnceCell::new()),
+                    right: Rc::new(OnceCell::new()),
+                }
+                .into(),
+            ),
+        }
     }
 }
 
 #[derive(Debug)]
-struct Instructions<'a> {
+struct Instructions {
     sequence: Vec<char>,
-    position: i32,
 }
 
 impl Instructions {
-    fn new(sequence: Vec<char>) -> Instructions {
-        Instructions {
-            sequence,
+    pub fn iter(&self) -> InstructionIterator {
+        InstructionIterator {
+            data: self,
             position: -1,
         }
     }
 }
 
-impl<'a> Iterator for Instructions<'a> {
+struct InstructionIterator<'a> {
+    data: &'a Instructions,
+    position: i32,
+}
+
+impl<'a> Iterator for InstructionIterator<'a> {
     type Item = &'a char;
     fn next(&mut self) -> Option<Self::Item> {
-        self.position = (self.position + 1) % self.sequence.len() as i32;
-        Some(&self.sequence[self.position as usize])
+        self.position = (self.position + 1) % self.data.sequence.len() as i32;
+        Some(&self.data.sequence[self.position as usize])
     }
 }
 
@@ -80,11 +142,16 @@ fn parse(file_path: &str, part_two: bool) -> Result<Problem, ParsingError> {
     let _ = reader.read_line(&mut buffer);
 
     let instructions: Vec<_> = buffer.chars().collect();
-    let instructions = Instructions::new(instructions);
+    let instructions = Instructions {
+        sequence: instructions,
+    };
 
     let re = Regex::new(r"(?<source>\w\w\w) = \((?<left>\w\w\w), (?<right>\w\w\w)\)").unwrap();
 
-    let mut dict = HashMap::new();
+    // let mut dict = HashMap::new();
+
+    let root: NodeRef = Rc::new(OnceCell::new());
+    let root = TreeNode::find_or_create(&root, "AAA");
 
     reader.lines().for_each(|line| {
         let line = line.unwrap();
@@ -94,33 +161,46 @@ fn parse(file_path: &str, part_two: bool) -> Result<Problem, ParsingError> {
             let left = captures["left"].to_string();
             let right = captures["right"].to_string();
 
-            dict.insert(source, (left, right));
+            let node = TreeNode::find_or_create(&root, &source);
+            let _ = node.set(TreeNode {
+                label: source,
+                left: TreeNode::find_or_create(&root, &left),
+                right: TreeNode::find_or_create(&root, &right),
+            });
         }
     });
 
-    let start_label = "AAA";
-    let root = get_node(start_label, &dict).unwrap();
 
     Ok(Problem { root, instructions })
 }
 
-fn process(file_path: &str, part_two: bool) -> io::Result<u64> {
+fn process(file_path: &str, part_two: bool) -> io::Result<usize> {
     let problem = parse(file_path, part_two).unwrap();
 
-    let mut node: &TreeNode = &problem.root;
+    dbg!(&problem);
+
+    let mut noderef: NodeRef = problem.root;
+    let mut instr_iter = problem.instructions.iter();
+    let mut counter: usize = 0;
 
     loop {
-        if problem.instructions.next().unwrap() == 'R' {
-            node = &node.right.unwrap();
-        } else {
-            node = &node.left.unwrap();
-        }
+        let node = noderef.get().unwrap();
+
         if node.label == "ZZZ" {
             break;
         }
+
+        dbg!(&node.label);
+
+        if *(instr_iter.next().unwrap()) == 'R' {
+            noderef = node.left.clone();
+        } else {
+            noderef = node.right.clone();
+        }
+        counter += 1;
     }
 
-    Ok(1)
+    Ok(counter)
 }
 
 fn main() {
