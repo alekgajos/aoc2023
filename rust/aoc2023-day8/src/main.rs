@@ -1,10 +1,9 @@
+use num::integer::lcm;
 use regex::Regex;
-use std::cell::RefCell;
-use std::fmt;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::num::ParseIntError;
-use std::rc::Rc;
 use std::result::Result;
 use thiserror::Error;
 
@@ -16,91 +15,16 @@ pub enum ParsingError {
     IOError(#[from] io::Error),
 }
 
-type NodeRef = Option<Rc<RefCell<TreeNode>>>;
-
-struct TreeNode {
-    label: String,
-    left: NodeRef,
-    right: NodeRef,
+#[derive(Debug)]
+struct Node {
+    left: String,
+    right: String,
 }
 
-// #[derive(Debug)]
+#[derive(Debug)]
 struct Problem {
-    root: NodeRef,
+    nodes: HashMap<String, Node>,
     instructions: Instructions,
-}
-
-impl fmt::Debug for Problem {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        TreeNode::print_node(&self.root, f)
-    }
-}
-
-impl TreeNode {
-    pub fn print_node(noderef: &NodeRef, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(node) = noderef {
-            println!("Calling recursive print_node");
-            let _ = TreeNode::print_node(&node.borrow().left, f);
-            let res = write!(f, "{} ", node.borrow().label);
-            let _ = TreeNode::print_node(&node.borrow().right, f);
-            res
-        } else {
-            println!("Called print_node with an empty noderef");
-            Ok(())
-        }
-    }
-
-    pub fn find(noderef: &NodeRef, label: &str) -> NodeRef {
-        println!("FIND: entering function for {}", label);
-
-        if let Some(node) = noderef {
-
-            let node = node.borrow();
-
-            println!(
-                "FIND: node.label={}, label param={}",
-                &node.label,
-                label
-            );
-
-            if node.label == label {
-                println!("FIND: found match {}", &node.label);
-                noderef.clone()
-            } else if node.label == "ZZZ" {
-                None
-            } else {
-                let left_find = TreeNode::find(&node.left, label);
-                let right_find = TreeNode::find(&node.right, label);
-                if left_find.is_some() {
-                    left_find.clone()
-                }else if right_find.is_some() {
-                    right_find
-                }else{
-                    None
-                }
-            }
-
-        } else {
-            None
-        }
-    }
-
-    pub fn find_or_create(root: &NodeRef, label: &str) -> NodeRef {
-        println!("find_or_create called");
-        match TreeNode::find(root, label) {
-            Some(node) => Some(node),
-            None => {
-                println!("Creating new node {}", &label);
-                Some(Rc::new(RefCell::new(
-                    TreeNode {
-                        label: label.to_owned(),
-                        left: None,
-                        right: None,
-                    }
-                )))
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -130,25 +54,21 @@ impl<'a> Iterator for InstructionIterator<'a> {
     }
 }
 
-fn parse(file_path: &str, part_two: bool) -> Result<Problem, ParsingError> {
+fn parse(file_path: &str) -> Result<Problem, ParsingError> {
     let file = File::open(file_path)?;
     let mut reader = BufReader::new(file);
-
     let mut buffer = String::new();
 
     let _ = reader.read_line(&mut buffer);
+    let instructions: Vec<_> = buffer.trim().chars().collect();
 
-    let instructions: Vec<_> = buffer.chars().collect();
     let instructions = Instructions {
         sequence: instructions,
     };
 
     let re = Regex::new(r"(?<source>\w\w\w) = \((?<left>\w\w\w), (?<right>\w\w\w)\)").unwrap();
 
-    // let mut dict = HashMap::new();
-
-    let root: NodeRef = None;
-    let root: NodeRef = TreeNode::find_or_create(&root, "AAA");
+    let mut dict = HashMap::new();
 
     reader.lines().for_each(|line| {
         let line = line.unwrap();
@@ -158,72 +78,73 @@ fn parse(file_path: &str, part_two: bool) -> Result<Problem, ParsingError> {
             let left = captures["left"].to_string();
             let right = captures["right"].to_string();
 
-            println!("processing new line {} = {}, {}", &source, &left, &right);
-
-            if source != "ZZZ" { 
-            let node = TreeNode::find_or_create(&root, &source).unwrap();
-
-            let left_child = TreeNode::find_or_create(&root, &left);
-            let right_child = TreeNode::find_or_create(&root, &right);
-
-            let mut node = node.borrow_mut();
-            node.left = left_child;
-            node.right = right_child;
-            }
-                
-            // node.left = Some(Rc::new(RefCell::new(TreeNode {
-            //     label: left.to_owned(),
-            //     left: None,
-            //     right: None,
-            // })));
-            //
-            // node.right = Some(Rc::new(RefCell::new(TreeNode {
-            //     label: right.to_owned(),
-            //     left: None,
-            //     right: None,
-            // })));
+            dict.insert(source.to_owned(), Node { left, right });
         }
     });
 
-    Ok(Problem { root, instructions })
+    Ok(Problem {
+        instructions,
+        nodes: dict,
+    })
 }
 
-fn process(file_path: &str, part_two: bool) -> io::Result<usize> {
-    let problem = parse(file_path, part_two).unwrap();
-
-    // dbg!(&problem);
-
-    let mut noderef: NodeRef = problem.root;
+fn walk_the_tree(
+    start_label: &str,
+    end_predicate: impl Fn(&str) -> bool,
+    problem: &Problem,
+) -> i64 {
+    let mut counter: i64 = 0;
+    let mut label = start_label;
     let mut instr_iter = problem.instructions.iter();
-    let mut counter: usize = 0;
 
-    // loop {
-    //     let node = noderef.unwrap();
-    //
-    //     if node.borrow().label == "ZZZ" {
-    //         break;
-    //     }
-    //
-    //     dbg!(&node.borrow().label);
-    //
-    //     if *(instr_iter.next().unwrap()) == 'L' {
-    //         noderef = node.borrow().left.clone();
-    //     } else {
-    //         noderef = node.borrow().right.clone();
-    //     }
-    //     counter += 1;
-    // }
+    loop {
+        if end_predicate(label) {
+            break;
+        }
 
-    Ok(counter)
+        let instr = *(instr_iter.next().unwrap());
+        // println!("Instr: {}, label: {}", &instr, &label);
+        // dbg!(&problem.nodes.get(label).unwrap());
+
+        if instr == 'L' {
+            label = &problem.nodes.get(label).unwrap().left;
+        } else {
+            label = &problem.nodes.get(label).unwrap().right;
+        }
+        counter += 1;
+    }
+
+    counter
+}
+
+fn process(file_path: &str, part_two: bool) -> io::Result<i64> {
+    let problem = parse(file_path).unwrap();
+
+    if !part_two {
+        Ok(walk_the_tree("AAA", |label: &str| label == "ZZZ", &problem))
+    } else {
+        let mut numbers: Vec<i64> = Vec::new();
+        for (start, _) in problem.nodes.iter() {
+            if start.ends_with('A') {
+                numbers.push(walk_the_tree(
+                    start,
+                    |label: &str| label.ends_with('Z'),
+                    &problem,
+                ))
+            }
+        }
+        Ok(numbers.into_iter().reduce(lcm).unwrap())
+    }
 }
 
 fn main() {
     let test_file = "test.txt";
+    let test_file_part2 = "test3.txt";
     let input_file = "input.txt";
 
-    // println!("{}", process(test_file, false).unwrap());
-    // println!("{}", process(input_file, false).unwrap());
+    println!("{}", process(test_file, false).unwrap());
+    println!("{}", process(input_file, false).unwrap());
 
-    println!("{}", process(test_file, true).unwrap());
-    // println!("{}", process(input_file, true).unwrap());
+    println!("{}", process(test_file_part2, true).unwrap());
+    println!("{}", process(input_file, true).unwrap());
 }
