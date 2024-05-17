@@ -9,12 +9,16 @@ def memoize[I, O](f: I => O): I => O = new mutable.HashMap[I, O]() { self =>
 class Problem(parts: List[Char], sequences: List[Int]) {
 
   def printMatrix(): Unit = {
+
+    println(parts)
+    println(sequences)
+
     List
       .range(0, parts.length)
       .foreach(i => {
         print(s"$i:\t")
         List
-          .range(1, sequences.length+1)
+          .range(1, sequences.length + 1)
           .foreach(j => {
             val x = countSolutions(i, j)
             print(s"$x\t| ")
@@ -32,20 +36,16 @@ class Problem(parts: List[Char], sequences: List[Int]) {
     case (i, _) if i < 0 => 0 // subarray of springs smaller than 1
     case (lastIndex, subSequences) => {
 
-      // println(s"i = $lastIndex j=$subSequences")
-
       val minIndex =
         sequences
           .take(subSequences)
           .sum + subSequences - 1 - 1 // last -1 is for 0-based indexing
+      val seqLen = sequences(subSequences - 1)
 
-      // println(s"minIndex = $minIndex")
-
-      if (lastIndex < minIndex) { // current sequences would not fit
-        0
+      if (lastIndex < minIndex) {
+        0 // not enough space for 0..j sequences
       } else {
-        val seqLen = sequences(subSequences - 1)
-        val lastPositionPossible: Int =
+        var lastPositionPossible: Int =
           if (lastIndex - seqLen >= 0 && parts(lastIndex - seqLen) == '#') {
             0 // sequence would be longer than required
           } else if (
@@ -62,17 +62,47 @@ class Problem(parts: List[Char], sequences: List[Int]) {
               0
             }
           }
+
+        // last sequence and #-s left => impossible placement
+        if (
+          subSequences == sequences.length
+          && parts
+            .slice(lastIndex + 1, parts.length)
+            .count(_ == '#') > 0
+        ) {
+          lastPositionPossible = 0
+        }
+        if (
+          subSequences == 1
+          && parts.slice(0, lastIndex - seqLen).contains('#')
+        ) {
+          lastPositionPossible = 0 // # left before the 1st sequence
+        }
+
         val next = countSolutions(
           lastIndex - seqLen - 1,
           subSequences - 1
         )
         val prev = countSolutions(lastIndex - 1, subSequences)
 
+        if (lastPositionPossible == 1) {
+          if (parts(lastIndex) == '#') {
+            next
+          } else {
+            next + prev
+          }
+        } else {
+          if (parts(lastIndex) == '#') {
+            0
+          } else {
+            prev
+          }
+        }
+
         // println(s"next = $next, prev=$prev, possible=$lastPositionPossible")
 
-        next * lastPositionPossible + prev
-
       }
+      // println(s"minIndex = $minIndex")
 
     }
 
@@ -85,14 +115,16 @@ object Day12 extends App {
   val testFile = "test.txt"
   val inputFile = "input.txt"
 
+  // val solutions = parse_input(testFile)
   val solutions = parse_input(inputFile)
-    .take(3)
+    // .reverse
+    // .take(34)
     .map(t => solve(t._1, t._2))
 
-  // print(solutions.mkString("\n"))
+  println(solutions.mkString("\n"))
 
   // println(solutions)
-  // println(solutions.sum)
+  println(solutions.sum)
 
   def parse_input(file_path: String) = {
     val source = Source.fromFile(file_path)
@@ -111,9 +143,8 @@ object Day12 extends App {
 
     // println(parts)
     // println(sequences)
-    // Problem(parts, sequences).countAllSolutions()
     Problem(parts, sequences).printMatrix()
+    Problem(parts, sequences).countAllSolutions()
 
-    1
   }
 }
