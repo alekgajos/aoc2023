@@ -27,106 +27,89 @@ class Problem(parts: List[Char], sequences: List[Int]) {
       })
   }
 
-  def countAllSolutions(): Int =
+  def positionAllowed(lastIndex: Int, subSequences: Int): Boolean = {
+    val seqLen = sequences(subSequences - 1)
+
+    val edges =
+      Seq(parts.lift(lastIndex - seqLen), parts.lift(lastIndex + 1)).flatten
+
+    if (edges.contains('#')) {
+      false // sequence would be longer than required
+    } else if (
+      subSequences == sequences.length
+      && parts
+        .slice(lastIndex + 1, parts.length)
+        .contains('#')
+    ) {
+      false // last sequence and #-s left => impossible placement
+    } else if (
+      subSequences == 1
+      && parts.slice(0, lastIndex - seqLen).contains('#')
+    ) {
+      false // # left before the 1st sequence
+    } else if (
+      parts
+        .slice(lastIndex - seqLen + 1, lastIndex + 1)
+        .count(c => c == '#' || c == '?') == seqLen
+    ) {
+      true
+    } else {
+      false
+    }
+  }
+
+  def minIndex(subSequences: Int): Int =
+    sequences
+      .take(subSequences)
+      .sum + subSequences - 1 - 1 // last -1 is for 0-based indexing
+
+  def countAllSolutions(): Long =
     countSolutions(parts.length - 1, sequences.length)
 
-  lazy val countSolutions: ((Int, Int)) => Int = memoize {
+  lazy val countSolutions: ((Int, Int)) => Long = memoize {
 
     case (_, 0)          => 1 // no sequences to fit
     case (i, _) if i < 0 => 0 // subarray of springs smaller than 1
     case (lastIndex, subSequences) => {
 
-      val minIndex =
-        sequences
-          .take(subSequences)
-          .sum + subSequences - 1 - 1 // last -1 is for 0-based indexing
-      val seqLen = sequences(subSequences - 1)
-
-      if (lastIndex < minIndex) {
-        0 // not enough space for 0..j sequences
+      if (lastIndex < minIndex(subSequences)) {
+        0 // not enough space for 1..subSequences sequences
       } else {
-        var lastPositionPossible: Int =
-          if (lastIndex - seqLen >= 0 && parts(lastIndex - seqLen) == '#') {
-            0 // sequence would be longer than required
-          } else if (
-            lastIndex + 1 < parts.length && parts(lastIndex + 1) == '#'
-          ) {
-            0 // sequence would be longer than required
-          } else {
-            val potentiallyBroken: Int = parts
-              .slice(lastIndex - seqLen + 1, lastIndex + 1)
-              .count(c => c == '#' || c == '?')
-            if (potentiallyBroken == seqLen) {
-              1
-            } else {
-              0
-            }
-          }
 
-        // last sequence and #-s left => impossible placement
-        if (
-          subSequences == sequences.length
-          && parts
-            .slice(lastIndex + 1, parts.length)
-            .count(_ == '#') > 0
-        ) {
-          lastPositionPossible = 0
-        }
-        if (
-          subSequences == 1
-          && parts.slice(0, lastIndex - seqLen).contains('#')
-        ) {
-          lastPositionPossible = 0 // # left before the 1st sequence
+        val seqLen = sequences(subSequences - 1)
+
+        // number of possible placements of 1..subSequences ending at lastIndex
+        val next = if (positionAllowed(lastIndex, subSequences)) {
+          countSolutions(
+            lastIndex - seqLen - 1,
+            subSequences - 1
+          )
+        } else {
+          0
         }
 
-        val next = countSolutions(
-          lastIndex - seqLen - 1,
-          subSequences - 1
-        )
+        // number of possible placements of 1..subSequences ending before lastIndex
         val prev = countSolutions(lastIndex - 1, subSequences)
 
-        if (lastPositionPossible == 1) {
-          if (parts(lastIndex) == '#') {
-            next
-          } else {
-            next + prev
-          }
+        if (parts(lastIndex) == '#') {
+          // only placing subSequences in the smaller subaray is not valid
+          // as it would leave out unused '#' to the right
+          next
         } else {
-          if (parts(lastIndex) == '#') {
-            0
-          } else {
-            prev
-          }
+          next + prev
         }
-
-        // println(s"next = $next, prev=$prev, possible=$lastPositionPossible")
-
       }
-      // println(s"minIndex = $minIndex")
-
     }
-
   }
 
 }
 
 object Day12 extends App {
 
-  val testFile = "test.txt"
-  val inputFile = "input.txt"
+  def unfold[T](l: List[T], separator: T) = List.fill(5)(l).reduce((a,b) => a:::List(separator):::b)
+  def unfold[T](l: List[T]) = List.fill(5)(l).reduce((a,b) => a:::b)
 
-  // val solutions = parse_input(testFile)
-  val solutions = parse_input(inputFile)
-    // .reverse
-    // .take(34)
-    .map(t => solve(t._1, t._2))
-
-  println(solutions.mkString("\n"))
-
-  // println(solutions)
-  println(solutions.sum)
-
-  def parse_input(file_path: String) = {
+  def parse_input(file_path: String, partTwo: Boolean = false) = {
     val source = Source.fromFile(file_path)
     source
       .getLines()
@@ -134,17 +117,29 @@ object Day12 extends App {
         val parts = l.split(" ")
         val springs = parts(0).toList
         val sequences = parts(1).split(",").toList.map(_.toInt)
-        (springs, sequences)
+        if (partTwo) {
+          (unfold(springs, '?'), unfold(sequences))
+        } else {
+          (springs, sequences)
+        }
       })
       .toList
   }
 
-  def solve(parts: List[Char], sequences: List[Int]): Int = {
-
-    // println(parts)
-    // println(sequences)
-    Problem(parts, sequences).printMatrix()
+  def solve(parts: List[Char], sequences: List[Int]): Long = {
+    // Problem(parts, sequences).printMatrix()
     Problem(parts, sequences).countAllSolutions()
-
   }
+  val testFile = "test.txt"
+  val inputFile = "input.txt"
+
+  val solutions = parse_input(inputFile)
+    .map(t => solve(t._1, t._2))
+
+  println(solutions.sum)
+
+  val solutions2 = parse_input(inputFile, true)
+    .map(t => solve(t._1, t._2))
+
+  println(solutions2.sum)
 }
