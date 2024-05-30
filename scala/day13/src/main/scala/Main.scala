@@ -12,10 +12,11 @@ case class Matrix(M: ListBuffer[String]) {
 
   def getSeq(index: Int)(using axis: Axis) = {
     axis match
-    case XAxis() => M.apply(index).map(c => if(c=='#')1 else 0).toList
-    case YAxis() => M.map(line => line.toList.apply(index)).map(c => if(c=='#')1 else 0).toList
-    // case YAxis() => M.map(line => line.chars().toArray().apply(index)).map(c=> if())toList
-
+      case XAxis() => M.apply(index).map(c => if (c == '#') 1 else 0).toList
+      case YAxis() =>
+        M.map(line => line.toList.apply(index))
+          .map(c => if (c == '#') 1 else 0)
+          .toList
   }
 
   def size()(using axis: Axis) = {
@@ -24,21 +25,36 @@ case class Matrix(M: ListBuffer[String]) {
       case YAxis() => M.head.length
   }
 
-  def checksums()(using  axis: Axis) = {
-    (0 to size()).map(i => getSeq(i).sum)
+  def checksums()(using axis: Axis) = {
+    (0 until size()).map(i => getSeq(i).sum)
   }
 
-  // lazy val row_checksums = M.map(_.chars().sum()).toList
-  // lazy val col_checksums =
-  //   (0 to M.length).map(getColumn(_)).map(l => l.sum).toList
+  def checkMatch(index: Int, span: Int)(using axis: Axis) = {
 
-  // def checkMatch(index: Int, span: Int, rows: Boolean) = {
-  //   if (rows) {
-  //     M(index) == M(index + span)
-  //   } else {
-  //     getColumn(index) == getColumn(index + span)
-  //   }
-  // }
+    getSeq(index - span) == getSeq(index + 1 + span)
+  }
+
+  def matches()(using axis: Axis) = checksums()
+    .sliding(2)
+    .map(l => l(0) == l(1))
+    .zipWithIndex
+    .filter((ok, i) => ok)
+    .map((ok, i) => i)
+    .filter(checkMatch(_, 0))
+    .toList
+
+  def checkReflection(index: Int)(using axis: Axis) = {
+
+    val lowerRange = index
+    val upperRange = size() - index - 2
+    val range = lowerRange.min(upperRange)
+
+    if ((1 to range).isEmpty) {
+      true
+    } else {
+      (1 to range).map(checkMatch(index, _)).reduce(_ && _)
+    }
+  }
 
 }
 
@@ -74,30 +90,17 @@ class Problem(lines: List[String]) {
 
   def solve(M: Matrix) = {
 
-  {
-    given Axis = XAxis()
-    println(M.size())
-  }
-  {
-    given Axis = YAxis()
-    println(M.size())
-    // println(M.checksums())
-  }
-    // println(M.col_checksums)
+    val xReflections = {
+      given Axis = XAxis()
+      M.matches().filter(M.checkReflection(_)).map(_ + 1)
+    }.headOption.getOrElse(0)
 
-    // val row_matches = M.row_checksums
-    //   .sliding(2)
-    //   .map(l => l(0) == l(1))
-    //   .zipWithIndex
-    //   .filter((ok, i) => ok)
-    //   .map((ok, i) => i)
-      // .filter(M.checkMatch(_, 1, true))
+    val yReflections = {
+      given Axis = YAxis()
+      M.matches().filter(M.checkReflection(_)).map(_ + 1)
+    }.headOption.getOrElse(0)
 
-    // println(row_matches.toList)
-
-    // row_matches.map
-
-    1
+    100 * xReflections + yReflections
   }
 
 }
@@ -107,21 +110,21 @@ object Day13 extends App {
   val testFile = "test.txt"
   val inputFile = "input.txt"
 
-  def parseInput(filePath: String) = {
+  def process(filePath: String) = {
     val lines = Source.fromFile(filePath).getLines().toList
     val problem = Problem(lines)
     problem.findMatrices(lines)
+    problem.matrices = problem.matrices.reverse
 
     problem.matrices.foreach(m => {
       m.M.foreach(l => println(l))
       println()
     })
 
-    println(problem.solveAll())
+    println(problem.solveAll().toList)
+    println(problem.solveAll().sum)
   }
 
-  parseInput(testFile)
-  // parseInput(inputFile)
-
-  println("Hello, World!")
+  // process(testFile)
+  process(inputFile)
 }
