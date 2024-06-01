@@ -30,17 +30,19 @@ case class Matrix(M: ListBuffer[String]) {
   }
 
   def checkMatch(index: Int, span: Int)(using axis: Axis) = {
-
-    getSeq(index - span) == getSeq(index + 1 + span)
+    getSeq(index - span)
+      .zip(getSeq(index + 1 + span))
+      .map(_ == _)
+      .count(_ == false)
   }
 
-  def matches()(using axis: Axis) = checksums()
+  def matches(diffThreshold: Int)(using axis: Axis) = checksums()
     .sliding(2)
-    .map(l => l(0) == l(1))
+    .map(l => (l(0) - l(1)).abs <= diffThreshold)
     .zipWithIndex
     .filter((ok, i) => ok)
     .map((ok, i) => i)
-    .filter(checkMatch(_, 0))
+    .filter(checkMatch(_, 0) <= diffThreshold)
     .toList
 
   def checkReflection(index: Int)(using axis: Axis) = {
@@ -49,16 +51,16 @@ case class Matrix(M: ListBuffer[String]) {
     val upperRange = size() - index - 2
     val range = lowerRange.min(upperRange)
 
-    if ((1 to range).isEmpty) {
+    if ((0 to range).isEmpty) {
       true
     } else {
-      (1 to range).map(checkMatch(index, _)).reduce(_ && _)
+      (0 to range).map(checkMatch(index, _)).sum
     }
   }
 
 }
 
-class Problem(lines: List[String]) {
+class Problem(lines: List[String], diffThreshold: Int) {
 
   var matrices = ListBuffer[Matrix]()
   matrices.prepend(Matrix(ListBuffer()))
@@ -84,20 +86,22 @@ class Problem(lines: List[String]) {
 
   }
 
-  def solveAll() = {
-    matrices.map(solve(_))
-  }
+  def solveAll() = matrices.map(solve(_))
 
   def solve(M: Matrix) = {
 
     val xReflections = {
       given Axis = XAxis()
-      M.matches().filter(M.checkReflection(_)).map(_ + 1)
+      M.matches(diffThreshold)
+        .filter(M.checkReflection(_) == diffThreshold)
+        .map(_ + 1)
     }.headOption.getOrElse(0)
 
     val yReflections = {
       given Axis = YAxis()
-      M.matches().filter(M.checkReflection(_)).map(_ + 1)
+      M.matches(diffThreshold)
+        .filter(M.checkReflection(_) == diffThreshold)
+        .map(_ + 1)
     }.headOption.getOrElse(0)
 
     100 * xReflections + yReflections
@@ -110,21 +114,17 @@ object Day13 extends App {
   val testFile = "test.txt"
   val inputFile = "input.txt"
 
-  def process(filePath: String) = {
+  def process(filePath: String, diffThreshold: Int) = {
     val lines = Source.fromFile(filePath).getLines().toList
-    val problem = Problem(lines)
+    val problem = Problem(lines, diffThreshold)
     problem.findMatrices(lines)
     problem.matrices = problem.matrices.reverse
 
-    problem.matrices.foreach(m => {
-      m.M.foreach(l => println(l))
-      println()
-    })
-
-    println(problem.solveAll().toList)
     println(problem.solveAll().sum)
   }
 
-  // process(testFile)
-  process(inputFile)
+  process(testFile, 0)
+  process(inputFile, 0)
+  process(testFile, 1)
+  process(inputFile, 1)
 }
