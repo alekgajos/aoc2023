@@ -1,69 +1,46 @@
-//> using scala 3.nightly
+//> using scala 3.4.1
 
 import scala.io.Source
 import scala.collection.mutable.ArraySeq
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.Buffer
+import scala.collection.mutable.Stack
 
 sealed trait Axis
 
-final case class XAxis() extends Axis
-final case class YAxis() extends Axis
+case object XAxis extends Axis
+case object YAxis extends Axis
 
-case class Matrix(M: ListBuffer[String]) {
+object Matrix {
 
-  def getSeq(index: Int)(using axis: Axis) = {
-    axis match
-      case XAxis() => M.apply(index).toList
-      case YAxis() =>
-        M.map(line => line.toList.apply(index)).toList
-  }
-
-  def size()(using axis: Axis) = {
-    axis match
-      case XAxis() => M.length
-      case YAxis() => M.head.length
-  }
-
-  def checksums()(using axis: Axis) = {
-    (0 until size()).map(i => getSeq(i).sum)
-  }
-
-  def checkMatch(index: Int, span: Int)(using axis: Axis) = {
-    getSeq(index - span)
-      .zip(getSeq(index + 1 + span))
-      .map(_ == _)
-      .count(_ == false)
-  }
-
-  def matches(diffThreshold: Int)(using axis: Axis) = checksums()
-    .sliding(2)
-    .map(l => (l(0) - l(1)).abs <= diffThreshold)
-    .zipWithIndex
-    .filter((ok, i) => ok)
-    .map((ok, i) => i)
-    .filter(checkMatch(_, 0) <= diffThreshold)
-    .toList
-
-  def checkReflection(index: Int)(using axis: Axis) = {
-
-    val lowerRange = index
-    val upperRange = size() - index - 2
-    val range = lowerRange.min(upperRange)
-
-    if ((0 to range).isEmpty) {
-      true
-    } else {
-      (0 to range).map(checkMatch(index, _)).sum
-    }
+  def apply(M: ListBuffer[String]) = {
+    new Matrix(M.mkString("").toCharArray().toBuffer, M.length, M.head.length)
   }
 
 }
 
-class Problem(lines: List[String], diffThreshold: Int) {
+class Matrix(var data: Buffer[Char], nrows: Int, ncols: Int) {
 
-  var matrices = ListBuffer[Matrix]()
-  matrices.prepend(Matrix(ListBuffer()))
+  def getSeq(index: Int, axis: Axis) = {
+    axis match
+      case XAxis =>
+        data.slice(index * size(YAxis), until = (index + 1) * size(YAxis))
+      case YAxis => data.drop(index).grouped(size(YAxis)).map(_.head).toList
+  }
+
+  def size(axis: Axis) = {
+    axis match
+      case XAxis => ncols
+      case YAxis => nrows
+  }
+
+}
+
+class Problem(filePath: String) {
+
+  var prematrices = ListBuffer[ListBuffer[String]]()
+  prematrices.prepend(ListBuffer())
 
   def findMatrices(l: List[String]): Unit = {
 
@@ -73,29 +50,37 @@ class Problem(lines: List[String], diffThreshold: Int) {
       case Some(line) => {
         line.length match {
           case 0 => {
-            matrices.prepend(Matrix(ListBuffer()))
+            prematrices.prepend(ListBuffer())
           }
           case _ => {
-            matrices.head.M.append(line)
+            prematrices.head.append(line)
           }
         }
         findMatrices(l.tail)
       }
       case None =>
     }
-
   }
 
-  def solveAll() = matrices.map(solve(_))
+  def parse() = {
+    val lines = Source.fromFile(filePath).getLines().toList
+    findMatrices(lines)
+    prematrices.reverse.map(Matrix(_))
+  }
+
+  def solveAll() = parse().map(solve(_))
 
   def solve(M: Matrix) = {
 
-    given columnWise: Axis = YAxis()
+    val columnWise: Axis = YAxis
     var result: Int = 0
     var rollingStones: Int = 0
-    for (index <- (0 until M.size())) {
+    var stoneStack: Stack[Int] = Stack()
+
+    for (index <- (0 until M.size(columnWise))) {
+
       rollingStones = 0
-      val col = M.getSeq(index).reverse.zipWithIndex
+      val col = M.getSeq(index, columnWise).reverse.zipWithIndex
       for ((c, i) <- col) {
         c match {
           case 'O' => {
@@ -112,35 +97,31 @@ class Problem(lines: List[String], diffThreshold: Int) {
       }
 
       for (k <- 1 to rollingStones) {
-        given rowWise: Axis = XAxis()
-        result += M.size() - k + 1
+        val rowWise: Axis = XAxis
+        result += M.size(rowWise) - k + 1
       }
     }
 
-    M.M.foreach(println(_))
-    println("=========")
+    // M.M.foreach(println(_))
+    // println("=========")
 
     result
   }
 
 }
 
-object Day13 extends App {
+object Day14 extends App {
 
   val testFile = "test.txt"
   val inputFile = "input.txt"
 
-  def process(filePath: String, diffThreshold: Int) = {
-    val lines = Source.fromFile(filePath).getLines().toList
-    val problem = Problem(lines, diffThreshold)
-    problem.findMatrices(lines)
-    problem.matrices = problem.matrices.reverse
+  def process(filePath: String) = {
 
-    println(problem.solveAll().sum)
+    println(Problem(filePath).solveAll().sum)
   }
 
-  process(testFile, 0)
-  process(inputFile, 0)
+  process(testFile)
+  process(inputFile)
   // process(testFile, 1)
   // process(inputFile, 1)
 }

@@ -4,3 +4,7 @@ target/
 .sbt
 .vscode
 .bsp
+input.txt
+.class
+.tasty
+.scala-build/
