@@ -1,12 +1,11 @@
 //> using scala 3.4.1
 
-import scala.io.Source
-import scala.collection.mutable.ArraySeq
-import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
-import scala.collection.mutable.Buffer
-import scala.collection.mutable.Stack
 import scala.annotation.tailrec
+import scala.collection.mutable
+import scala.collection.mutable.Buffer
+import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.Stack
+import scala.io.Source
 
 sealed trait Axis
 case object XAxis extends Axis
@@ -23,20 +22,10 @@ val South = NESW(YAxis, Forward)
 val East = NESW(XAxis, Forward)
 val West = NESW(XAxis, Backward)
 
-def time[R](block: => R): R = {
-  val t0 = System.nanoTime()
-  val result = block // call-by-name
-  val t1 = System.nanoTime()
-  println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
-  result
-}
-
 object Matrix {
-
   def apply(M: ListBuffer[String]) = {
     new Matrix(M.mkString("").toCharArray().toBuffer, M.length, M.head.length)
   }
-
 }
 
 class Matrix(var data: Buffer[Char], nrows: Int, ncols: Int) {
@@ -122,49 +111,36 @@ class Problem(filePath: String) {
 
   var fastForwarded: Boolean = false
   val nrounds: Long = 1000000000
-  // val nrounds: Int = 100
 
   @tailrec
   final def cycleTiltsNtimes(M: Matrix, times: Long): Matrix = {
 
-    println(s"times = $times")
     if (times == 0) {
       return M
     }
 
     cycleTilts(M) match {
-      case (newM, true) => {
-        var newTimes = times-1
-        if(!fastForwarded){
+      case (newM, iteration) if iteration > 0 => {
+        var newTimes = times
+        if (!fastForwarded) {
           fastForwarded = true
-          println(s"times=$times")
           val n = nrounds - times
-          println(s"n=$n")
-          newTimes = nrounds % n
-          println(s"newTimes = $newTimes")
+          newTimes = (nrounds - iteration) % (n - iteration)
           if (newTimes == 0) {
-            M.print()
-            newM.print()
-            return cycleTilts(cycleTilts(M)._1)._1
+            return M
           }
-        } 
-        cycleTiltsNtimes(newM, newTimes)
+        }
+        cycleTiltsNtimes(newM, newTimes - 1)
       }
-      case (newM, false) => {
+      case (newM, 0) => {
         cycleTiltsNtimes(newM, times - 1)
       }
     }
   }
 
   def solvePart2() = {
-
     var M = parse().head
-
     M = cycleTiltsNtimes(M, nrounds)
-
-    // .map(M => {
-    // val finalMatrix = (1 to ).foldLeft(M)((M,i)=>cycleTilts(M))
-    // val finalMatrix = (1 to 10000000).foldLeft(M)((M, i) => cycleTilts(M))
     calcLoadNorth(M)
   }
 
@@ -209,9 +185,6 @@ class Problem(filePath: String) {
       }
     }
 
-    // println()
-    // M.print()
-
     M
   }
 
@@ -233,22 +206,23 @@ class Problem(filePath: String) {
     result
   }
 
-  val cache = new mutable.HashMap[String, Matrix]()
+  val cache = new mutable.HashMap[String, Long]()
+  var nTilts: Long = 0
 
-  def cycleTilts(M: Matrix): (Matrix, Boolean) = {
+  def cycleTilts(M: Matrix): (Matrix, Long) = {
 
+    nTilts += 1
     val key = M.data.mkString
-    // val M = origM.copy()
+    val tilts = Seq(North, West, South, East)
+    val newMatrix = tilts.foldLeft(M)(tilt(_, _))
 
     cache.get(key) match
       case None => {
-        val tilts = Seq(North, West, South, East)
-        val newMatrix = tilts.foldLeft(M)(tilt(_, _))
-        cache.addOne(key -> newMatrix)
-        (newMatrix, false)
+        cache.addOne(key -> (nTilts - 1))
+        (newMatrix, 0)
       }
-      case Some(newMatrix) => {
-        (newMatrix, true)
+      case Some(iteration) => {
+        (newMatrix, iteration)
       }
 
   }
@@ -262,9 +236,9 @@ object Day14 extends App {
 
   def process(filePath: String) = {
     println(Problem(filePath).solvePart1())
-    time { println(Problem(filePath).solvePart2()) }
+    println(Problem(filePath).solvePart2()) 
   }
 
   process(testFile)
-  // process(inputFile)
+  process(inputFile)
 }
