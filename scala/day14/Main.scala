@@ -6,6 +6,7 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.Buffer
 import scala.collection.mutable.Stack
+import scala.annotation.tailrec
 
 sealed trait Axis
 case object XAxis extends Axis
@@ -22,15 +23,13 @@ val South = NESW(YAxis, Forward)
 val East = NESW(XAxis, Forward)
 val West = NESW(XAxis, Backward)
 
-// def memoize(f: Matrix => Matrix): Matrix => Matrix = new mutable.HashMap[String, Matrix]() {
-//   override def apply(key: Matrix) = {
-//
-//     println(toString())
-//     keys.foreach(println(_))
-//
-//     getOrElseUpdate(key.data.mkString, f(key))
-//   }
-// }
+def time[R](block: => R): R = {
+  val t0 = System.nanoTime()
+  val result = block // call-by-name
+  val t1 = System.nanoTime()
+  println("Elapsed time: " + (t1 - t0) / 1000000 + "ms")
+  result
+}
 
 object Matrix {
 
@@ -42,17 +41,8 @@ object Matrix {
 
 class Matrix(var data: Buffer[Char], nrows: Int, ncols: Int) {
 
-  override def hashCode(): Int = {
-    println(s"HC called, data=$data")
-    val hc = data.toString().hashCode()
-    println(s"hc = $hc")
-    hc
-  }
-
-  override def equals(other: Any) = {
-    other match
-      case m: Matrix => data == m.data
-      case _         => false
+  def copy() = {
+    new Matrix(data.clone(), nrows, ncols)
   }
 
   def otherAxis(axis: Axis) = axis match
@@ -130,21 +120,57 @@ class Problem(filePath: String) {
 
   def solvePart1() = parse().map(m => calcLoadNorth(tilt(m, North))).sum
 
-  def solvePart2() = parse()
-    .map(M => {
-      // val finalMatrix = (1 to 1000000000).foldLeft(M)((M,i)=>cycleTilts(M))
-      val finalMatrix = (1 to 3).foldLeft(M)((M, i) => {
-        println(s"i=$i")
-        M.print()
-        cycleTilts(M)
-      })
-      calcLoadNorth(finalMatrix)
-    })
-    .sum[Int]
+  var fastForwarded: Boolean = false
+  val nrounds: Long = 1000000000
+  // val nrounds: Int = 100
 
-  def tilt(M: Matrix, vector: NESW): Matrix = {
+  @tailrec
+  final def cycleTiltsNtimes(M: Matrix, times: Long): Matrix = {
 
-    // M.print()
+    println(s"times = $times")
+    if (times == 0) {
+      return M
+    }
+
+    cycleTilts(M) match {
+      case (newM, true) => {
+        var newTimes = times-1
+        if(!fastForwarded){
+          fastForwarded = true
+          println(s"times=$times")
+          val n = nrounds - times
+          println(s"n=$n")
+          newTimes = nrounds % n
+          println(s"newTimes = $newTimes")
+          if (newTimes == 0) {
+            M.print()
+            newM.print()
+            return cycleTilts(cycleTilts(M)._1)._1
+          }
+        } 
+        cycleTiltsNtimes(newM, newTimes)
+      }
+      case (newM, false) => {
+        cycleTiltsNtimes(newM, times - 1)
+      }
+    }
+  }
+
+  def solvePart2() = {
+
+    var M = parse().head
+
+    M = cycleTiltsNtimes(M, nrounds)
+
+    // .map(M => {
+    // val finalMatrix = (1 to ).foldLeft(M)((M,i)=>cycleTilts(M))
+    // val finalMatrix = (1 to 10000000).foldLeft(M)((M, i) => cycleTilts(M))
+    calcLoadNorth(M)
+  }
+
+  def tilt(origM: Matrix, vector: NESW): Matrix = {
+
+    val M: Matrix = origM.copy()
 
     var rollingStones: Int = 0
     var stoneStack: Stack[Int] = Stack()
@@ -183,9 +209,8 @@ class Problem(filePath: String) {
       }
     }
 
-    println(s"vec = $vector")
-    println()
-    M.print()
+    // println()
+    // M.print()
 
     M
   }
@@ -208,18 +233,23 @@ class Problem(filePath: String) {
     result
   }
 
-  lazy val cache = new mutable.HashMap[String, Matrix]()
+  val cache = new mutable.HashMap[String, Matrix]()
 
-  def cycleTilts(M: Matrix): Matrix = {
+  def cycleTilts(M: Matrix): (Matrix, Boolean) = {
 
-    cache.get(M.data.mkString) match
+    val key = M.data.mkString
+    // val M = origM.copy()
+
+    cache.get(key) match
       case None => {
         val tilts = Seq(North, West, South, East)
         val newMatrix = tilts.foldLeft(M)(tilt(_, _))
-        cache.addOne(M.data.mkString -> newMatrix)
-        newMatrix
+        cache.addOne(key -> newMatrix)
+        (newMatrix, false)
       }
-      case Some(newMatrix) => newMatrix
+      case Some(newMatrix) => {
+        (newMatrix, true)
+      }
 
   }
 
@@ -232,7 +262,7 @@ object Day14 extends App {
 
   def process(filePath: String) = {
     println(Problem(filePath).solvePart1())
-    println(Problem(filePath).solvePart2())
+    time { println(Problem(filePath).solvePart2()) }
   }
 
   process(testFile)
