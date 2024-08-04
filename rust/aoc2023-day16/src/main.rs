@@ -11,10 +11,10 @@ struct Vec2D {
     y: i64,
 }
 
-struct Map {
+struct Map<T> {
     height: usize,
     width: usize,
-    data: Vec<char>,
+    data: Vec<T>,
 }
 
 impl Add for Vec2D {
@@ -27,8 +27,8 @@ impl Add for Vec2D {
     }
 }
 
-impl Map {
-    pub fn new(height: usize, width: usize, data: Vec<char>) -> Map {
+impl<T> Map<T> {
+    pub fn new(height: usize, width: usize, data: Vec<T>) -> Map<T> {
         Map {
             height,
             width,
@@ -37,7 +37,7 @@ impl Map {
     }
 
     #[allow(dead_code)]
-    fn column_iter(&self, column_index: usize) -> impl Iterator<Item = &char> {
+    fn column_iter(&self, column_index: usize) -> impl Iterator<Item = &T> {
         self.data.iter().skip(column_index).step_by(self.height)
     }
 
@@ -52,7 +52,7 @@ impl Map {
     }
 
     #[allow(dead_code)]
-    pub fn get(&self, position: Vec2D) -> Option<&char> {
+    pub fn get(&self, position: Vec2D) -> Option<&T> {
         if position.x < 0
             || position.y < 0
             || position.x as usize >= self.width
@@ -65,7 +65,7 @@ impl Map {
         }
     }
 
-    pub fn set(&mut self, position: Vec2D, value: char) {
+    pub fn set(&mut self, position: Vec2D, value: T) {
         if position.x >= 0 && position.y >= 0 {
             let index: usize = position.y as usize * self.width + position.x as usize;
             self.data[index] = value;
@@ -101,7 +101,7 @@ struct Step {
     position: Vec2D,
 }
 
-impl Debug for Map {
+impl<T: std::fmt::Display> Debug for Map<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.data.chunks(self.width).for_each(|row| {
             let _ = f.write_char('\n');
@@ -113,7 +113,7 @@ impl Debug for Map {
     }
 }
 
-fn parse(file_path: &str) -> Map {
+fn parse(file_path: &str) -> Map<char> {
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
 
@@ -199,7 +199,7 @@ fn process(file_path: &str, part_two: bool) -> i64 {
     }
 }
 
-fn count_energized(map: &Map, start: Vec2D, start_direction: Direction) -> i64 {
+fn count_energized(map: &Map<char>, start: Vec2D, start_direction: Direction) -> i64 {
     let directions = [&N, &S, &E, &W];
 
     let mut cache = directions
@@ -207,7 +207,7 @@ fn count_energized(map: &Map, start: Vec2D, start_direction: Direction) -> i64 {
         .map(|d| {
             (
                 d,
-                Map::new(map.height, map.width, vec!['0'; map.height * map.width]),
+                Map::new(map.height, map.width, vec![false; map.height * map.width]),
             )
         })
         .collect::<HashMap<_, _>>();
@@ -223,7 +223,7 @@ fn count_energized(map: &Map, start: Vec2D, start_direction: Direction) -> i64 {
 
         // check if already "visited"
         if let Some(visited) = cache.get(&cs.direction).unwrap().get(cs.position) {
-            if *visited != '0' {
+            if *visited {
                 // position was cached
                 continue;
             }
@@ -232,7 +232,7 @@ fn count_energized(map: &Map, start: Vec2D, start_direction: Direction) -> i64 {
             continue;
         }
 
-        cache.get_mut(&cs.direction).unwrap().set(cs.position, '1');
+        cache.get_mut(&cs.direction).unwrap().set(cs.position, true);
 
         let element = map.get(cs.position).unwrap();
 
@@ -261,7 +261,6 @@ fn count_energized(map: &Map, start: Vec2D, start_direction: Direction) -> i64 {
                         y: y as i64,
                     })
                     .unwrap()
-                    != '0'
                 {
                     energized = true;
                 }
