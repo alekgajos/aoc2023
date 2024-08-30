@@ -9,6 +9,7 @@ struct Vertex {
     distance: i64,
     predecessor: Vec2D,
     position: Vec2D,
+    used: bool,
 }
 
 impl PartialEq for Vertex {
@@ -21,7 +22,7 @@ impl Eq for Vertex {}
 
 impl Ord for Vertex {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.distance.cmp(&other.distance) /* .reverse() */
+        self.distance.cmp(&other.distance).reverse()
     }
 }
 
@@ -84,7 +85,7 @@ fn get_next(vertex: Vec2D, graph: &Map<Vertex>) -> Vec<Vec2D> {
 
         let mut count: u64 = 0;
 
-        let max_same = 2;
+        let max_same = 3;
 
         // check if the direction was repeated 3 times
         while count < max_same {
@@ -126,6 +127,7 @@ fn process(file_path: &str) -> i64 {
                 distance: 100000,
                 predecessor: Vec2D { x: -1, y: -1 },
                 position: Vec2D { x: 0, y: 0 },
+                used: false,
             };
             map.height * map.width
         ],
@@ -149,6 +151,7 @@ fn process(file_path: &str) -> i64 {
         distance: 0,
         predecessor: Vec2D { x: -1, y: -1 },
         position: Vec2D { x: 0, y: 0 },
+        used: true,
     };
     let target = Vec2D {
         x: (map.width - 1) as i64,
@@ -159,17 +162,25 @@ fn process(file_path: &str) -> i64 {
     queue.push(start.clone());
 
     while !&queue.is_empty() {
+        // dbg!(&queue);
+
         let mut vertex = queue.pop().unwrap();
         while visited.contains(&vertex.position) {
             // TODO: check if we do not drain the queue here!
             vertex = queue.pop().unwrap();
         }
 
+        println!("vertex chosen {:?}", vertex.distance);
+
         if vertex.position == target {
             break;
         }
 
         let nexts = get_next(vertex.position, &graph);
+
+        if vertex.position.x == 3 && vertex.position.y == 1 {
+            dbg!(&nexts);
+        }
 
         for next in nexts {
             if visited.contains(&next) {
@@ -198,15 +209,35 @@ fn process(file_path: &str) -> i64 {
     let mut pos = graph.get(target).unwrap().predecessor;
     while pos != start.position {
         len += 1;
-        println!(
-            "{} : {}",
-            map.get(pos).unwrap(),
-            graph.get(pos).unwrap().distance,
-        );
+        graph.modify(pos, |v| v.used = true);
         pos = graph.get(pos).unwrap().predecessor;
     }
 
-    dbg!(&len);
+    dbg!(&map);
+
+    // graph.print_with(|v| (v.used as i64).to_string());
+    println!("------------------------");
+
+    graph.print_with(|v| {
+        if v.used {
+            format!("|{}|", v.distance)
+        } else {
+            (v.distance).to_string()
+        }
+    });
+    println!("------------------------");
+
+    graph.print_with(|v| {
+        let diff = v.position - v.predecessor;
+        match diff {
+            Vec2D { x, y } if x < 0 && y == 0 => "<",
+            Vec2D { x, y } if x > 0 && y == 0 => ">",
+            Vec2D { x, y } if x == 0 && y < 0 => "^",
+            Vec2D { x, y } if x == 0 && y > 0 => "v",
+            _ => "?",
+        }
+        .to_string()
+    });
 
     graph.get(target).unwrap().distance
 }

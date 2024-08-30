@@ -106,7 +106,15 @@ impl<T> Map<T> {
         }
     }
 
-    // pub fn print_with(&self, f: impl Fn(&T) -> impl Debug) {}
+    pub fn print_with(&self, f: impl Fn(&T) -> String) {
+        self.data.chunks(self.width).for_each(|row| {
+            println!("");
+            row.iter().for_each(|x| {
+                print!("{}\t", f(x));
+            });
+        });
+        println!("");
+    }
 }
 
 impl<T: std::fmt::Display> Debug for Map<T> {
