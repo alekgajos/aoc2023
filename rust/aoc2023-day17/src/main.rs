@@ -10,6 +10,7 @@ struct Vertex {
     predecessor: Vec2D,
     position: Vec2D,
     used: bool,
+    path: String,
 }
 
 impl PartialEq for Vertex {
@@ -128,6 +129,7 @@ fn process(file_path: &str) -> i64 {
                 predecessor: Vec2D { x: -1, y: -1 },
                 position: Vec2D { x: 0, y: 0 },
                 used: false,
+                path: String::from(""),
             };
             map.height * map.width
         ],
@@ -152,6 +154,7 @@ fn process(file_path: &str) -> i64 {
         predecessor: Vec2D { x: -1, y: -1 },
         position: Vec2D { x: 0, y: 0 },
         used: true,
+        path: String::from(""),
     };
     let target = Vec2D {
         x: (map.width - 1) as i64,
@@ -165,12 +168,10 @@ fn process(file_path: &str) -> i64 {
         // dbg!(&queue);
 
         let mut vertex = queue.pop().unwrap();
-        while visited.contains(&vertex.position) {
+        while visited.contains(vertex.path.as_str()) {
             // TODO: check if we do not drain the queue here!
             vertex = queue.pop().unwrap();
         }
-
-        println!("vertex chosen {:?}", vertex.distance);
 
         if vertex.position == target {
             break;
@@ -183,13 +184,24 @@ fn process(file_path: &str) -> i64 {
         }
 
         for next in nexts {
-            if visited.contains(&next) {
+            let next_mnemonic = match (next - vertex.position) {
+                Vec2D { x, y } if x < 0 && y == 0 => "<",
+                Vec2D { x, y } if x > 0 && y == 0 => ">",
+                Vec2D { x, y } if x == 0 && y < 0 => "^",
+                Vec2D { x, y } if x == 0 && y > 0 => "v",
+                _ => "?",
+            };
+
+            let next_path = String::from(&vertex.path) + next_mnemonic;
+            // dbg!(&next_path);
+
+            if visited.contains(&next_path) {
                 continue;
             }
             let mut next_vertex = graph.get(next).unwrap().clone();
             let next_value = map.get(next).unwrap().to_digit(10).unwrap() as i64;
 
-            if next_vertex.distance > vertex.distance + next_value {
+            if next_vertex.distance >= vertex.distance + next_value {
                 graph.modify(next, |v: &mut Vertex| {
                     v.distance = vertex.distance + next_value;
                     v.predecessor = vertex.position;
@@ -197,12 +209,13 @@ fn process(file_path: &str) -> i64 {
 
                 next_vertex.distance = vertex.distance + next_value;
                 next_vertex.predecessor = vertex.position;
+                next_vertex.path = String::from(&vertex.path) + next_mnemonic;
 
                 queue.push(next_vertex);
             }
         }
 
-        visited.insert(vertex.position);
+        visited.insert(vertex.path);
     }
 
     let mut len = 0;
