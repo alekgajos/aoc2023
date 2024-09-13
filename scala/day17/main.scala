@@ -26,10 +26,11 @@ case class Position(x: Int, y: Int) {
   def +(v: Vec) = Position(x + v.x, y + v.y)
 }
 
-case class Vertex(pos: Position, dir: Vec, distance: Int, step: Int)
-    extends Ordered[Vertex] {
-  def compare(other: Vertex): Int = {
-    -1*this.distance.compare(other.distance)
+case class Vertex(pos: Position, dir: Vec, step: Int)
+
+case class Candidate(vertex: Vertex, distance: Int) extends Ordered[Candidate] {
+  def compare(other: Candidate): Int = {
+    -1 * this.distance.compare(other.distance)
   }
 }
 
@@ -66,31 +67,36 @@ class Problem(lines: List[String]) {
   def solve(part_two: Boolean): Int = {
     M.print()
 
-    var queue = PriorityQueue[Vertex]()
-    var visited = HashSet[(Position, Vec, Int)]()
-    var predecessors = HashMap[Position, Position]()
-    var distances = HashMap[Position, Int]()
+    var queue = PriorityQueue[Candidate]()
+    var visited = HashSet[Vertex]()
+    var predecessors = HashMap[Vertex, Vertex]()
+    var distances = HashMap[Vertex, Int]()
 
     val start = Position(0, 0)
+    var prev_vtx = Vertex(start, Vec(0, 0), 0)
     List(Vec(0, 1), Vec(1, 0)).foreach(dir => {
       var path_heat = 0
       1 to 3 foreach (step => {
         val pos = start + dir * step
-        predecessors.addOne((pos, start+dir*(step-1)))
+        val vertex = Vertex(pos, dir, step)
+        predecessors.addOne((vertex, prev_vtx))
+        prev_vtx = vertex
         path_heat += M(pos).get
-        distances.addOne((pos, path_heat))
-        queue.enqueue(Vertex(pos, dir, path_heat, step))
+        distances.addOne((vertex, path_heat))
+        queue.enqueue(Candidate(vertex, path_heat))
       })
 
     })
 
+
     while (!queue.isEmpty) {
 
-      val vertex = queue.dequeue()
+      val Candidate(vertex, distance) = queue.dequeue()
 
-      if (!visited.contains((vertex.pos, vertex.dir, vertex.step))) {
 
-        visited.add((vertex.pos, vertex.dir, vertex.step))
+      if (!visited.contains(vertex)) {
+
+        visited.add(vertex)
 
         // if (vertex.pos == Position(M.width - 1, M.height - 1)) {
         //   return vertex.distance
@@ -101,49 +107,71 @@ class Problem(lines: List[String]) {
           .foreach(dir => {
 
             var path_heat = 0
-            var prev_vtx = vertex.pos
+            var prev_vtx = vertex
 
             1 to 3 foreach (step => {
 
               val pos = vertex.pos + dir * step
-              if(!visited.contains((pos, dir, step))){
+              val this_vertex = Vertex(pos, dir, step)
+
+              // if(!visited.contains((pos, dir, step))){
+
               M(pos) match {
                 case Some(heat) => {
+
                   path_heat += heat
-                  val old_distance = distances.get(pos).getOrElse(1000)
-                  if (vertex.distance + path_heat <= old_distance) {
-                    distances.addOne((pos, vertex.distance + path_heat))
+                  val old_distance = distances.get(this_vertex).getOrElse(Int.MaxValue)
+
+                  if (distance + path_heat <= old_distance) {
+                    distances.addOne((this_vertex, distance + path_heat))
+                    predecessors.addOne((this_vertex, prev_vtx))
+
                     queue.enqueue(
-                      Vertex(pos, dir, vertex.distance + path_heat, step)
+                      Candidate(Vertex(pos, dir, step), distance + path_heat)
                     )
-                    predecessors.addOne((pos, prev_vtx))
+
                   }
+
+                  prev_vtx = vertex
+
                 }
                 case None =>
-              }}
-              prev_vtx = pos
+              }
+              prev_vtx = this_vertex
             })
           })
 
       }
     }
 
-
     var used = HashSet[Position]()
-    var pos = Position(M.width-1, M.height-1)
+    var pos = Position(M.width - 1, M.height - 1)
 
-    while (pos != start) {
-      pos = predecessors.get(pos).get
-      used.addOne(pos)
+    val dists = for (
+      (vertex, distance) <- distances
+      if vertex.pos == Position(M.width - 1, M.height - 1)
+    ) yield { distance }
+    val min_dist = dists.min()
+    val final_vertex = distances
+      .find((v, d) =>
+        v.pos == Position(M.width - 1, M.height - 1) && d == min_dist
+      )
+      .get(0)
+
+    var vtx = final_vertex
+
+    while (vtx.pos != start) {
+      vtx = predecessors.get(vtx).get
+      used.addOne(vtx.pos)
     }
 
-    0 until M.height foreach(yy => {
-      0 until M.width foreach {
-        xx => {
+    0 until M.height foreach (yy => {
+      0 until M.width foreach { xx =>
+        {
           val pos = Position(xx, yy)
-          if (used.contains(pos)){
+          if (used.contains(pos)) {
             print(s"|${M(pos).get}| ")
-          }else{
+          } else {
             print(s" ${M(pos).get}  ")
           }
         }
@@ -151,9 +179,8 @@ class Problem(lines: List[String]) {
       println()
     })
 
-    distances.get(Position(M.width-1, M.height-1)).get
+    min_dist
   }
-
 }
 
 object Day13 extends App {
@@ -169,7 +196,7 @@ object Day13 extends App {
   }
 
   process(testFile, false)
-  // process(inputFile, 0)
+  process(inputFile, false) // 1155
   // process(testFile, 1)
   // process(inputFile, 1)
 }
