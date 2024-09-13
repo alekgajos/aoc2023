@@ -64,8 +64,7 @@ class Problem(lines: List[String]) {
   val ints = lines.map(l => l.toCharArray().map(c => c.asDigit).toList)
   val M = Matrix(ints)
 
-  def solve(part_two: Boolean): Int = {
-    M.print()
+  def solve(min_steps: Int, max_steps: Int): Int = {
 
     var queue = PriorityQueue[Candidate]()
     var visited = HashSet[Vertex]()
@@ -76,14 +75,21 @@ class Problem(lines: List[String]) {
     var prev_vtx = Vertex(start, Vec(0, 0), 0)
     List(Vec(0, 1), Vec(1, 0)).foreach(dir => {
       var path_heat = 0
-      1 to 3 foreach (step => {
+      1 to max_steps foreach (step => {
         val pos = start + dir * step
         val vertex = Vertex(pos, dir, step)
         predecessors.addOne((vertex, prev_vtx))
         prev_vtx = vertex
-        path_heat += M(pos).get
-        distances.addOne((vertex, path_heat))
-        queue.enqueue(Candidate(vertex, path_heat))
+        val heat = M(pos)
+        if (!heat.isEmpty) {
+
+          path_heat += M(pos).get
+          distances.addOne((vertex, path_heat))
+
+          if(step >= min_steps){
+            queue.enqueue(Candidate(vertex, path_heat))
+          }
+        }
       })
 
     })
@@ -109,7 +115,7 @@ class Problem(lines: List[String]) {
             var path_heat = 0
             var prev_vtx = vertex
 
-            1 to 3 foreach (step => {
+            1 to max_steps foreach (step => {
 
               val pos = vertex.pos + dir * step
               val this_vertex = Vertex(pos, dir, step)
@@ -126,9 +132,11 @@ class Problem(lines: List[String]) {
                     distances.addOne((this_vertex, distance + path_heat))
                     predecessors.addOne((this_vertex, prev_vtx))
 
-                    queue.enqueue(
-                      Candidate(Vertex(pos, dir, step), distance + path_heat)
-                    )
+                    if(step >= min_steps){
+                      queue.enqueue(
+                        Candidate(Vertex(pos, dir, step), distance + path_heat)
+                      )
+                    }
 
                   }
 
@@ -149,7 +157,7 @@ class Problem(lines: List[String]) {
 
     val dists = for (
       (vertex, distance) <- distances
-      if vertex.pos == Position(M.width - 1, M.height - 1)
+      if vertex.pos == Position(M.width - 1, M.height - 1) && vertex.step >= min_steps
     ) yield { distance }
     val min_dist = dists.min()
     val final_vertex = distances
@@ -186,17 +194,19 @@ class Problem(lines: List[String]) {
 object Day13 extends App {
 
   val testFile = "test.txt"
+  val testFile2 = "test2.txt"
   val inputFile = "input.txt"
 
   def process(filePath: String, part_two: Boolean) = {
     val lines = Source.fromFile(filePath).getLines().toList
-    val heat_loss = Problem(lines).solve(part_two)
+    val heat_loss = if (part_two) Problem(lines).solve(4, 10) else Problem(lines).solve(1,3)
 
     println(heat_loss)
   }
 
-  process(testFile, false)
-  process(inputFile, false) // 1155
-  // process(testFile, 1)
-  // process(inputFile, 1)
+  // process(testFile, false)
+  // process(inputFile, false) // 1155
+  process(testFile, true)
+  process(testFile2, true)
+  process(inputFile, true)
 }
