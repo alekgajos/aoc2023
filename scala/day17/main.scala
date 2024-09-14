@@ -2,6 +2,7 @@ import scala.io.Source
 import java.lang.Math.sqrt
 import scala.collection.mutable.PriorityQueue
 import scala.collection.mutable.{HashSet, HashMap}
+import scala.util.control.Breaks.{breakable, break}
 
 case class Vec(x: Int, y: Int) {
 
@@ -26,7 +27,17 @@ case class Position(x: Int, y: Int) {
   def +(v: Vec) = Position(x + v.x, y + v.y)
 }
 
-case class Vertex(pos: Position, dir: Vec, step: Int)
+case class Vertex(pos: Position, dir: Vec, step: Int) {
+
+  def getNextDirs(): Seq[Vec] = {
+    if (pos != Position(0, 0)) {
+      dir.perp()
+    } else {
+      List(Vec(0, 1), Vec(1, 0))
+    }
+  }
+
+}
 
 case class Candidate(vertex: Vertex, distance: Int) extends Ordered[Candidate] {
   def compare(other: Candidate): Int = {
@@ -70,31 +81,57 @@ class Problem(lines: List[String]) {
   var distances = HashMap[Vertex, Int]()
   var final_vertex = Vertex(target, Vec(0, 0), 0)
 
+  def stepInDir(
+      source: Vertex,
+      dir: Vec,
+      queue: PriorityQueue[Candidate],
+      source_dist: Int,
+      min_steps: Int,
+      max_steps: Int
+  ) = {
+
+    var path_heat = 0
+    var prev_vtx = source
+
+    breakable {
+      1 to max_steps foreach (step => {
+
+        val pos = source.pos + dir * step
+        val this_vertex = Vertex(pos, dir, step)
+
+        val heat =
+          try {
+            M(pos).get
+          } catch {
+            case _ => break
+          }
+
+        path_heat += heat
+        val updated_distance = source_dist + path_heat
+        val old_distance =
+          distances.get(this_vertex).getOrElse(Int.MaxValue)
+
+        if (updated_distance <= old_distance) {
+          distances.addOne((this_vertex, updated_distance))
+          predecessors.addOne((this_vertex, prev_vtx))
+
+          if (step >= min_steps) {
+            queue.enqueue(
+              Candidate(Vertex(pos, dir, step), updated_distance)
+            )
+          }
+        }
+
+        prev_vtx = this_vertex
+      })
+    }
+
+  }
+
   def solve(min_steps: Int, max_steps: Int): Int = {
 
     var queue = PriorityQueue[Candidate]()
-
-    var prev_vtx = Vertex(start, Vec(0, 0), 0)
-    List(Vec(0, 1), Vec(1, 0)).foreach(dir => {
-      var path_heat = 0
-      1 to max_steps foreach (step => {
-        val pos = start + dir * step
-        val vertex = Vertex(pos, dir, step)
-        predecessors.addOne((vertex, prev_vtx))
-        prev_vtx = vertex
-        val heat = M(pos)
-        if (!heat.isEmpty) {
-
-          path_heat += M(pos).get
-          distances.addOne((vertex, path_heat))
-
-          if (step >= min_steps) {
-            queue.enqueue(Candidate(vertex, path_heat))
-          }
-        }
-      })
-
-    })
+    queue.enqueue(Candidate(Vertex(start, Vec(0, 0), 0), 0))
 
     while (!queue.isEmpty) {
 
@@ -109,44 +146,11 @@ class Problem(lines: List[String]) {
           return distance
         }
 
-        vertex.dir
-          .perp()
-          .foreach(dir => {
-
-            var path_heat = 0
-            var prev_vtx = vertex
-
-            1 to max_steps foreach (step => {
-
-              val pos = vertex.pos + dir * step
-              val this_vertex = Vertex(pos, dir, step)
-
-              M(pos) match {
-                case Some(heat) => {
-
-                  path_heat += heat
-                  val updated_distance = distance + path_heat
-                  val old_distance =
-                    distances.get(this_vertex).getOrElse(Int.MaxValue)
-
-                  if (updated_distance <= old_distance) {
-                    distances.addOne((this_vertex, updated_distance))
-                    predecessors.addOne((this_vertex, prev_vtx))
-
-                    if (step >= min_steps) {
-                      queue.enqueue(
-                        Candidate(Vertex(pos, dir, step), updated_distance)
-                      )
-                    }
-                  }
-                  prev_vtx = vertex
-                }
-                case None =>
-              }
-              prev_vtx = this_vertex
-            })
-          })
-
+        vertex
+          .getNextDirs()
+          .foreach(dir =>
+            stepInDir(vertex, dir, queue, distance, min_steps, max_steps)
+          )
       }
     }
 
