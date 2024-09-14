@@ -63,15 +63,17 @@ class Problem(lines: List[String]) {
 
   val ints = lines.map(l => l.toCharArray().map(c => c.asDigit).toList)
   val M = Matrix(ints)
+  val target = Position(M.width - 1, M.height - 1)
+  val start = Position(0, 0)
+  var visited = HashSet[Vertex]()
+  var predecessors = HashMap[Vertex, Vertex]()
+  var distances = HashMap[Vertex, Int]()
+  var final_vertex = Vertex(target, Vec(0, 0), 0)
 
   def solve(min_steps: Int, max_steps: Int): Int = {
 
     var queue = PriorityQueue[Candidate]()
-    var visited = HashSet[Vertex]()
-    var predecessors = HashMap[Vertex, Vertex]()
-    var distances = HashMap[Vertex, Int]()
 
-    val start = Position(0, 0)
     var prev_vtx = Vertex(start, Vec(0, 0), 0)
     List(Vec(0, 1), Vec(1, 0)).foreach(dir => {
       var path_heat = 0
@@ -86,7 +88,7 @@ class Problem(lines: List[String]) {
           path_heat += M(pos).get
           distances.addOne((vertex, path_heat))
 
-          if(step >= min_steps){
+          if (step >= min_steps) {
             queue.enqueue(Candidate(vertex, path_heat))
           }
         }
@@ -94,19 +96,18 @@ class Problem(lines: List[String]) {
 
     })
 
-
     while (!queue.isEmpty) {
 
       val Candidate(vertex, distance) = queue.dequeue()
-
 
       if (!visited.contains(vertex)) {
 
         visited.add(vertex)
 
-        // if (vertex.pos == Position(M.width - 1, M.height - 1)) {
-        //   return vertex.distance
-        // }
+        if (vertex.pos == target) {
+          final_vertex = vertex
+          return distance
+        }
 
         vertex.dir
           .perp()
@@ -120,28 +121,25 @@ class Problem(lines: List[String]) {
               val pos = vertex.pos + dir * step
               val this_vertex = Vertex(pos, dir, step)
 
-              // if(!visited.contains((pos, dir, step))){
-
               M(pos) match {
                 case Some(heat) => {
 
                   path_heat += heat
-                  val old_distance = distances.get(this_vertex).getOrElse(Int.MaxValue)
+                  val updated_distance = distance + path_heat
+                  val old_distance =
+                    distances.get(this_vertex).getOrElse(Int.MaxValue)
 
-                  if (distance + path_heat <= old_distance) {
-                    distances.addOne((this_vertex, distance + path_heat))
+                  if (updated_distance <= old_distance) {
+                    distances.addOne((this_vertex, updated_distance))
                     predecessors.addOne((this_vertex, prev_vtx))
 
-                    if(step >= min_steps){
+                    if (step >= min_steps) {
                       queue.enqueue(
-                        Candidate(Vertex(pos, dir, step), distance + path_heat)
+                        Candidate(Vertex(pos, dir, step), updated_distance)
                       )
                     }
-
                   }
-
                   prev_vtx = vertex
-
                 }
                 case None =>
               }
@@ -152,19 +150,12 @@ class Problem(lines: List[String]) {
       }
     }
 
+    Int.MaxValue
+  }
+
+  def printPath() = {
     var used = HashSet[Position]()
     var pos = Position(M.width - 1, M.height - 1)
-
-    val dists = for (
-      (vertex, distance) <- distances
-      if vertex.pos == Position(M.width - 1, M.height - 1) && vertex.step >= min_steps
-    ) yield { distance }
-    val min_dist = dists.min()
-    val final_vertex = distances
-      .find((v, d) =>
-        v.pos == Position(M.width - 1, M.height - 1) && d == min_dist
-      )
-      .get(0)
 
     var vtx = final_vertex
 
@@ -186,9 +177,8 @@ class Problem(lines: List[String]) {
       }
       println()
     })
-
-    min_dist
   }
+
 }
 
 object Day13 extends App {
@@ -199,14 +189,18 @@ object Day13 extends App {
 
   def process(filePath: String, part_two: Boolean) = {
     val lines = Source.fromFile(filePath).getLines().toList
-    val heat_loss = if (part_two) Problem(lines).solve(4, 10) else Problem(lines).solve(1,3)
+    val problem = Problem(lines)
+    val heat_loss =
+      if (part_two) problem.solve(4, 10) else problem.solve(1, 3)
+
+    problem.printPath()
 
     println(heat_loss)
   }
 
-  // process(testFile, false)
+  process(testFile, false)
   // process(inputFile, false) // 1155
-  process(testFile, true)
-  process(testFile2, true)
-  process(inputFile, true)
+  // process(testFile, true)
+  // process(testFile2, true)
+  // process(inputFile, true)
 }
