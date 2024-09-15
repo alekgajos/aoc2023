@@ -34,6 +34,13 @@ impl Mul<i64> for Vec2D {
     }
 }
 
+impl Mul<Vec2D> for Vec2D {
+    type Output = i64;
+    fn mul(self, rhs: Vec2D) -> i64 {
+        self.x * rhs.x + self.y * rhs.y
+    }
+}
+
 impl Sub for Vec2D {
     type Output = Vec2D;
     fn sub(self, rhs: Vec2D) -> Vec2D {
