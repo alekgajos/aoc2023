@@ -1,6 +1,7 @@
 use core::ops::{Add, Mul, Sub};
 use std::fmt::Debug;
 use std::fmt::Write;
+use std::slice::Chunks;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Vec2D {
@@ -62,6 +63,10 @@ impl<T> Map<T> {
 
     pub fn column_iter(&self, column_index: usize) -> impl Iterator<Item = &T> {
         self.data.iter().skip(column_index).step_by(self.height)
+    }
+
+    pub fn rows(&self) -> Chunks<T> {
+        self.data.chunks(self.width)
     }
 
     pub fn coords(&self, index: usize) -> Vec2D {
