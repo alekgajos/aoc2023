@@ -109,17 +109,15 @@ fn parse_map(file_path: &str) -> Map<char> {
     Map::new(n_rows, n_columns, rows.into_iter().flatten().collect())
 }
 
-fn parse(file_path: &str) -> Map<char> {
+fn parse(file_path: &str) -> (Vec<Vec2D>, i64) {
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
-
-    // let mut instr = Vec::new();
 
     let instr: Vec<Instruction> = reader
         .lines()
         .map(|line| {
             let line = line.unwrap();
-            let parts: Vec<&str> = line.split(" ").collect();
+            let parts: Vec<&str> = line.split(' ').collect();
             Instruction {
                 direction: parts[0].to_owned(),
                 steps: parts[1].parse::<i64>().unwrap(),
@@ -128,75 +126,53 @@ fn parse(file_path: &str) -> Map<char> {
         })
         .collect();
 
-    let n_rows: usize = instr
-        .iter()
-        .filter(|ii| ii.direction == "D")
-        .map(|ii| ii.steps)
-        .sum::<i64>() as usize
-        + 1;
-    let n_cols: usize = instr
-        .iter()
-        .filter(|ii| ii.direction == "R")
-        .map(|ii| ii.steps)
-        .sum::<i64>() as usize
-        + 1;
-
-    let mut map = Map::new(n_rows, n_cols, vec!['.'; n_rows * n_cols]);
     let mut pos: Vec2D = Vec2D { x: 0, y: 0 };
 
-    instr.iter().for_each(|ii| {
-        let dir = match ii.direction.as_str() {
-            "R" => Vec2D { x: 1, y: 0 },
-            "L" => Vec2D { x: -1, y: 0 },
-            "D" => Vec2D { x: 0, y: 1 },
-            "U" => Vec2D { x: 0, y: -1 },
-            _ => panic!("Unknown direction!"),
-        };
+    let vertices = instr
+        .iter()
+        .map(|ii| {
+            let dir = match ii.direction.as_str() {
+                "R" => Vec2D { x: 1, y: 0 },
+                "L" => Vec2D { x: -1, y: 0 },
+                "D" => Vec2D { x: 0, y: 1 },
+                "U" => Vec2D { x: 0, y: -1 },
+                _ => panic!("Unknown direction!"),
+            };
 
-        let _ = match ii.direction.as_str() {
-            "U" | "D" => {
-                map.set(pos, *ii.direction.as_bytes().first().unwrap() as char);
-            }
-            _ => (),
-        };
-        for _ in 1..=ii.steps {
-            let new_pos = pos + dir;
-            map.set(new_pos, *ii.direction.as_bytes().first().unwrap() as char);
-            pos = new_pos;
-        }
-    });
+            pos = pos + dir * ii.steps;
+            pos
+        })
+        .collect();
 
-    map
+    let circumference: i64 = instr.iter().map(|ii| ii.steps).sum();
+
+    (vertices, circumference)
 }
 
 fn process(file_path: &str, part_two: bool) -> i64 {
-    let map = parse(file_path);
+    let (vertices, circumference) = parse(file_path);
+    let mut vertices_circular = vertices.clone();
+    vertices_circular.push(*vertices.first().unwrap());
 
-    dbg!(&map);
-    let mut problem = Problem { map };
+    let double_area: i64 = vertices_circular
+        .windows(2)
+        .map(|pair| pair[0].x * pair[1].y - pair[1].x * pair[0].y)
+        .sum();
+    let area = double_area / 2;
+    let size = area + circumference / 2 + 1;
 
-    if !part_two {
-        problem.find_area()
-    } else {
-        todo!();
-    }
-}
-
-fn dbgp(file_path: &str) {
-    let map = parse_map(file_path);
-    dbg!(&map);
-    println!("dbg = {}", Problem { map }.find_area());
+    dbg!(&area);
+    dbg!(circumference);
+    dbg!(&size);
+    size
 }
 
 fn main() {
     let test_file = "test.txt";
-    let dbg_file = "test2.txt";
     let input_file = "input.txt";
 
-    dbgp(dbg_file);
-
-    // println!("{}", process(test_file, false));
-    // println!("{}", process(input_file, false));
+    println!("{}", process(test_file, false));
+    println!("{}", process(input_file, false));
     //
     // println!("{}", process(test_file, true));
     // println!("{}", process(input_file, true));
