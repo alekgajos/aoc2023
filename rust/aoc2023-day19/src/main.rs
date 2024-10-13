@@ -111,7 +111,7 @@ impl<'a> Processor<'a> {
                     let mut ranges_right = ranges.clone();
                     *ranges_right.get_mut(&passes.label).unwrap() *= passes;
 
-                    return self.dispatch(target, ranges_left) + self.step(ranges_right, tail);
+                    self.dispatch(target.as_str(), ranges_left) + self.step(ranges_right, tail)
                 }
             }
             _ => panic!(),
@@ -283,9 +283,9 @@ fn main() {
     let test_file = "test.txt";
     let input_file = "input.txt";
 
-    // println!("{}", process(test_file, false));
-    // println!("{}", process(input_file, false));
+    println!("{}", process(test_file, false));
+    println!("{}", process(input_file, false));
     //
     println!("{}", process(test_file, true));
-    // println!("{}", process(input_file, true));
+    println!("{}", process(input_file, true));
 }
