@@ -84,18 +84,13 @@ impl<'a> Processor<'a> {
 
     fn dispatch(&self, target: &str, ranges: Ranges) -> i64 {
         match target {
-            "A" => {
-                ranges.values().map(|r| r.count()).product()
-            },
-            "R" => {
-                0
-            },
+            "A" => ranges.values().map(|r| r.count()).product(),
+            "R" => 0,
             _ => {
                 let new_workflows = self.workflows.get(target).unwrap().rules.as_slice();
                 self.step(ranges, new_workflows)
             }
         }
-        
     }
 
     fn step(&self, ranges: Ranges, rules: &[Rule]) -> i64 {
@@ -160,6 +155,22 @@ fn rule_to_ranges(rule: &Rule) -> (Range, Range, String) {
     }
 }
 
+fn part_to_ranges(part: &Part) -> Ranges {
+    let mut ranges = HashMap::new();
+    for (key, value) in part.map.iter() {
+        ranges.insert(
+            key.to_string(),
+            Range {
+                label: key.to_owned(),
+                low: *value,
+                high: *value,
+                is_empty: false,
+            },
+        );
+    }
+    ranges
+}
+
 fn process(file_path: &str, part_two: bool) -> i64 {
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
@@ -195,63 +206,29 @@ fn process(file_path: &str, part_two: bool) -> i64 {
         }
     });
 
+    let proc = Processor {
+        workflows: &workflows,
+    };
+
     if !part_two {
         items
             .iter()
-            .map(|item| process_item(&workflows, item))
+            .map(|part| {
+                let ranges = part_to_ranges(part);
+                if proc.step(ranges, workflows.get("in").unwrap().rules.as_slice()) > 0 {
+                    part.map.values().sum()
+                } else {
+                    0
+                }
+            })
             .sum()
     } else {
-        let proc = Processor {
-            workflows: &workflows,
-        };
-
         let mut full_ranges = HashMap::new();
         for name in ["x", "m", "a", "s"] {
             full_ranges.insert(name.to_string(), Range::new(name));
         }
 
         proc.step(full_ranges, workflows.get("in").unwrap().rules.as_slice())
-    }
-}
-
-fn process_item(workflows: &HashMap<String, Workflow>, item: &Part) -> i64 {
-    let mut cw: &Workflow = workflows.get("in").unwrap();
-    loop {
-        let mut rule_iter = cw.rules.iter();
-        let mut cr: &Rule = rule_iter.next().unwrap();
-
-        loop {
-            match cr {
-                Rule::Mid(what, thr, less_than_thr, target) => {
-                    if (*less_than_thr && item[what] < *thr)
-                        || (!*less_than_thr && item[what] > *thr)
-                    {
-                        // rule accepts the part
-                        if target == "A" {
-                            return item.map.values().sum();
-                        } else if target == "R" {
-                            return 0;
-                        } else {
-                            cw = workflows.get(target).unwrap();
-                            break;
-                        }
-                    } else {
-                        // move to the next rule in the same workflow
-                        cr = rule_iter.next().unwrap();
-                    }
-                }
-                Rule::Final(target) => {
-                    if target == "A" {
-                        return item.map.values().sum();
-                    } else if target == "R" {
-                        return 0;
-                    } else {
-                        cw = workflows.get(target).unwrap();
-                        break;
-                    }
-                }
-            }
-        }
     }
 }
 
