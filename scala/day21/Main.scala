@@ -30,8 +30,7 @@ case class Point(x: Int, y: Int):
   def +(rhs: Point): Point =
     Point(this.x + rhs.x, this.y + rhs.y)
 
-
-def part1(file:String, steps: Int): Int = 
+def part1(file: String, steps: Int): Int =
 
   val source = Source.fromFile(file)
   val lines = source.getLines().toList
@@ -43,10 +42,7 @@ def part1(file:String, steps: Int): Int =
   for
     y <- 0 until map.height
     x <- 0 until map.width
-  do
-    // print(map.map(x)(y))
-    // if x == map.width - 1 then println()
-    if map.map(x)(y) == 'S' then start = Point(x, y)
+  do if map.map(x)(y) == 'S' then start = Point(x, y)
 
   println(start)
 
@@ -61,23 +57,79 @@ def part1(file:String, steps: Int): Int =
   while (Q.nonEmpty) do
     val next = Q.dequeue()
     val d = distances(next)
-    
+
     if d < steps && !visited.contains(next) then
       map
         .moves(next)
-        .foreach( v =>
-          distances.update(v, d+1)
+        .foreach(v =>
+          distances.update(v, d + 1)
           Q.enqueue(v)
         )
       visited.add(next)
 
-  distances.filter((p,d) => d==steps).foreach(println)
+  distances.filter((p, d) => d == steps).foreach(println)
 
-  var count = distances.count((p,d) => d<=steps && d%2==0)
+  var count = distances.count((p, d) => d <= steps && d % 2 == 0)
   count
-  // distances
+
+def part2(file: String, steps: Int): Long =
+
+  val source = Source.fromFile(file)
+  val lines = source.getLines().toList
+
+  val map = Map2D(lines)
+
+  var start = Point(-1, -1)
+
+  for
+    y <- 0 until map.height
+    x <- 0 until map.width
+  do if map.map(x)(y) == 'S' then start = Point(x, y)
+
+  println(start)
+
+  val Q = Queue[Point]()
+  Q.enqueue(start)
+
+  val distances = HashMap[Point, Int]()
+  distances.update(start, 0)
+
+  val visited = HashSet[Point]()
+
+  while (Q.nonEmpty) do
+    val next = Q.dequeue()
+    val d = distances(next)
+
+    if !visited.contains(next) then
+      map
+        .moves(next)
+        .foreach(v =>
+          distances.update(v, d + 1)
+          Q.enqueue(v)
+        )
+      visited.add(next)
+
+  val limit = map.width / 2
+  println(s"limit = $limit")
+
+  val even = distances.count((p, d) => d % 2 == 0)
+  val odd = distances.count((p, d) => d % 2 == 1)
+  val even_corner = distances.count((p, d) => d > limit && d % 2 == 0)
+  val odd_corner = distances.count((p, d) => d > limit && d % 2 == 1)
+
+  val n = (steps - limit) / map.width
+  println(s"n = $n")
+
+  println(s"even = $even")
+  println(s"odd = $odd")
+
+  scala.math.pow((n + 1).toDouble, 2).toLong * odd + scala.math
+    .pow(n.toDouble, 2)
+    .toLong * even - (n + 1).toLong * odd_corner + n.toLong * even_corner
 
 @main def hello(): Unit =
+  // println(part1("test.txt", 6))
+  // println(part1("input.txt", 64))
 
-  println(part1("test.txt", 6))
-  println(part1("input.txt", 64))
+  println(part2("test.txt", 6))
+  // println(part2("input.txt", 26501365))
